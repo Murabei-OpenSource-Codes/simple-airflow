@@ -32,19 +32,22 @@ ENV AIRFLOW__SCHEDULER__CHILD_PROCESS_LOG_DIRECTORY="/airflow/child_process_log/
 ENV AIRFLOW__WEBSERVER__BASE_URL="http://localhost:8080/"
 ENV AIRFLOW__WEBSERVER__WEB_SERVER_HOST="0.0.0.0"
 ENV AIRFLOW__WEBSERVER__WEB_SERVER_PORT="8080"
-ENV AIRFLOW__WEBSERVER__SECRET_KEY_SECRET="o1vZ9ms0lEu2NaX7CXgfsw=="
+ENV AIRFLOW__CORE__LOAD_EXAMPLES="false"
+
+# Change authentication to accept basic
+ENV AIRFLOW__API__AUTH_BACKENDS="airflow.api.auth.backend.basic_auth"
 
 ###################
 # Git information #
 # ENV GIT_SERVER
 # ENV GIT_REPOSITORY
-ENV GIT_BRANCH="master"
+ENV GIT_BRANCH="main"
 
-
-########################
-# Getting repositories #
+###################################
+# Database and Linux dependencies #
 # Installing lsb-release to make life easier :)
 RUN apt-get update && apt-get install -y lsb-release && apt-get clean all
+RUN apt-get -y upgrade
 
 # Postgres
 RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
@@ -78,12 +81,10 @@ RUN apt-get install -y --no-install-recommends \
         unixodbc \
         curl
 
-
 ###############################
 # Installing Postgres Drivers #
 RUN apt-get -y install libpq-dev postgresql-client postgresql-client-common
 RUN apt-get install -y --force-yes curl
-
 
 ################################
 # Installing SQL Sever Drivers #
@@ -91,26 +92,24 @@ RUN ACCEPT_EULA=Y apt-get install -y msodbcsql17
 RUN apt-get install -y unixodbc-dev
 RUN apt-get install -y libgssapi-krb5-2
 
-
 ############################
 # Installing Redis Drivers #
 RUN apt-get -y install redis-server
-
 
 ##################################
 # Installing python dependencies #
 RUN apt-get -y install python3 python3-dev python3-pip python3-wheel \
   libsasl2-dev gcc libsasl2-dev libldap2-dev libssl-dev
 
-
 #######################
 # Python requirements #
 COPY requirements/requirements.txt ./requirements/
 COPY requirements/constraints.txt ./requirements/
 RUN pip3 install --upgrade pip
-RUN pip3 install -r /requirements/requirements.txt \
-  -c /requirements/constraints.txt
-
+RUN pip install "apache-airflow[celery]==2.3.4" psycopg2==2.9.3 \
+    --constraint /requirements/constraints.txt
+RUN pip install --requirement /requirements/requirements.txt \
+    --constraint /requirements/constraints.txt
 
 #########################################
 # Creating directories and coping codes #
@@ -119,6 +118,11 @@ RUN mkdir -p /airflow/logs/
 RUN mkdir -p /airflow/plugins/
 RUN mkdir -p /airflow/child_process_log/
 COPY code /airflow
+
+#####################################
+# Creating directories for ssh keys #
+RUN mkdir -p /ssh_keys/
+RUN mkdir -p /root/.ssh/
 
 #############################
 # Coping git update cronjob #
